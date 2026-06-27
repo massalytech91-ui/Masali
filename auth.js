@@ -1,7 +1,7 @@
 /* ===== Service AUTHENTIFICATION =====
-   Auth locale MVP : mot de passe hashÃ© en PBKDF2 (jamais stockÃ© en clair).
-   Pas de vÃ©rification serveur dans ce MVP (voir notes production).
-   La session courante est gardÃ©e en mÃ©moire + clÃ© 'meta' pour la persistance. */
+   Auth locale MVP : mot de passe hashé en PBKDF2 (jamais stocké en clair).
+   Pas de vérification serveur dans ce MVP (voir notes production).
+   La session courante est gardée en mémoire + clé 'meta' pour la persistance. */
 const Auth = (() => {
   const enc = new TextEncoder();
   let _current = null;
@@ -49,5 +49,18 @@ const Auth = (() => {
   async function logout() { _current = null; await DB.del('meta', 'session'); }
   const current = () => _current;
 
-  return { register, login, restore, logout, current };
+  // Reset password locally (MVP). Replaces the stored hash+salt for the given email.
+  // Returns true on success, throws 'not_found' if user missing.
+  async function resetPassword({ email, newPassword }) {
+    email = email.trim().toLowerCase();
+    const rec = await DB.get('practitioners', email);
+    if (!rec) throw new Error('not_found');
+    const { hash: h, salt } = await hash(newPassword);
+    rec.passwordHash = h;
+    rec.passwordSalt = salt;
+    await DB.put('practitioners', rec);
+    return true;
+  }
+
+  return { register, login, restore, logout, current, resetPassword };
 })();
