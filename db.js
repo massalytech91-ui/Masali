@@ -1,6 +1,6 @@
-/* ===== Couche ACCÃˆS DONNÃ‰ES (IndexedDB) =====
-   Aucune logique mÃ©tier ici : juste lire/Ã©crire des objets.
-   C'est le SEUL fichier Ã  rÃ©Ã©crire pour brancher un vrai backend. */
+/* ===== Couche ACCÈS DONNÉES (IndexedDB) =====
+   Aucune logique métier ici : juste lire/écrire des objets.
+   C'est le SEUL fichier à réécrire pour brancher un vrai backend. */
 const DB = (() => {
   const NAME = 'ehr_db';
   const VERSION = 1;
@@ -41,13 +41,30 @@ const DB = (() => {
     });
   }
 
+  // tx now resolves properly with the actual request result when the
+  // operation returns an IDBRequest, avoiding returning the raw request object.
   function tx(store, mode, fn) {
     return open().then(db => new Promise((resolve, reject) => {
       const t = db.transaction(store, mode);
       const os = t.objectStore(store);
-      const r = fn(os);
-      t.oncomplete = () => resolve(r && r.result !== undefined ? r.result : r);
-      t.onerror = () => reject(t.error);
+      let r;
+      try {
+        r = fn(os);
+      } catch (err) {
+        return reject(err);
+      }
+
+      // If the operation returned an IDBRequest (get/put/delete/getAll, ...),
+      // listen for its onsuccess/ onerror to resolve with .result.
+      if (r && typeof r.addEventListener === 'function' || r && 'onsuccess' in r) {
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+      } else {
+        // Otherwise fall back to transaction completion (for bulk ops that don't
+        // expose a single request result) and resolve with the function return value.
+        t.oncomplete = () => resolve(r && r.result !== undefined ? r.result : r);
+        t.onerror = () => reject(t.error);
+      }
     }));
   }
 
@@ -67,7 +84,7 @@ const DB = (() => {
     }));
   }
 
-  // Helpers communs mÃ©tier
+  // Helpers communs métier
   const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
     : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
       const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
