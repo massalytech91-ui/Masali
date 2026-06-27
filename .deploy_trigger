@@ -1,5 +1,5 @@
-Trigger Pages deploy
+Trigger Pages deploy: add forgot password UI
 
-This file is automatically committed to trigger the GitHub Actions Pages deployment.
+This commit triggers GitHub Actions to rebuild and deploy the site after adding forgot password UI and login link.
 
-Timestamp: 2026-06-27T12:49:00Z
+Timestamp: 2026-06-27T12:59:00Z
