@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin — Masali</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body { padding: 16px; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #f6f6f6; }
+    button { margin-right: 8px; }
+    .controls { margin-bottom: 12px; }
+    pre { background: #f4f4f4; padding: 8px; overflow: auto; max-height: 300px; }
+  </style>
+</head>
+<body>
+  <h1>Admin — Données praticiens</h1>
+  <div class="controls">
+    <button id="refreshBtn">Rafraîchir</button>
+    <button id="exportBtn">Exporter JSON</button>
+    <button id="resetBtn">Réinitialiser la base (supprime tout)</button>
+  </div>
+
+  <table aria-label="Praticiens">
+    <thead>
+      <tr><th>Email</th><th>Nom complet</th><th>Clinique</th><th>Créé</th><th>Actions</th></tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+  <h2>JSON export</h2>
+  <pre id="jsonOut">(Aucun export)</pre>
+
+  <script src="db.js"></script>
+  <script>
+    async function refresh() {
+      try {
+        const list = await DB.all('practitioners');
+        const tbody = document.getElementById('tbody');
+        tbody.innerHTML = '';
+        if (!list || list.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5">Aucun praticien trouvé</td></tr>';
+          return;
+        }
+        list.forEach(p => {
+          const tr = document.createElement('tr');
+          const emailTd = document.createElement('td'); emailTd.textContent = p.email;
+          const nameTd = document.createElement('td'); nameTd.textContent = p.fullName || '';
+          const clinicTd = document.createElement('td'); clinicTd.textContent = p.clinicName || '';
+          const createdTd = document.createElement('td'); createdTd.textContent = p.createdAt || '';
+          const actionsTd = document.createElement('td');
+
+          const delBtn = document.createElement('button');
+          delBtn.textContent = 'Supprimer';
+          delBtn.addEventListener('click', async () => {
+            if (!confirm('Supprimer le praticien ' + p.email + ' ?')) return;
+            await DB.del('practitioners', p.email);
+            await refresh();
+          });
+
+          const showBtn = document.createElement('button');
+          showBtn.textContent = 'Voir';
+          showBtn.addEventListener('click', () => {
+            document.getElementById('jsonOut').textContent = JSON.stringify(p, null, 2);
+          });
+
+          actionsTd.appendChild(showBtn);
+          actionsTd.appendChild(delBtn);
+
+          tr.appendChild(emailTd);
+          tr.appendChild(nameTd);
+          tr.appendChild(clinicTd);
+          tr.appendChild(createdTd);
+          tr.appendChild(actionsTd);
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error(err);
+        alert('Erreur en lisant la base IndexedDB: ' + err.message);
+      }
+    }
+
+    async function exportJSON() {
+      const list = await DB.all('practitioners') || [];
+      const out = list.map(p => ({ email: p.email, fullName: p.fullName, clinicName: p.clinicName, createdAt: p.createdAt, passwordHash: p.passwordHash, passwordSalt: p.passwordSalt }));
+      const text = JSON.stringify(out, null, 2);
+      document.getElementById('jsonOut').textContent = text || '(vide)';
+      const blob = new Blob([text], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'practitioners.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function resetDB() {
+      if (!confirm('Vraiment supprimer toutes les données (IndexedDB) ?')) return;
+      const req = indexedDB.deleteDatabase('ehr_db');
+      req.onsuccess = () => { alert('Base supprimée'); location.reload(); };
+      req.onerror = () => { alert('Erreur lors de la suppression de la base'); };
+      req.onblocked = () => { alert('Suppression bloquée — fermez les autres onglets de l\'application'); };
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', refresh);
+    document.getElementById('exportBtn').addEventListener('click', exportJSON);
+    document.getElementById('resetBtn').addEventListener('click', resetDB);
+
+    // Auto refresh on load
+    window.addEventListener('load', () => { refresh(); });
+  </script>
+</body>
+</html>
